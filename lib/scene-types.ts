@@ -220,6 +220,9 @@ export interface CameraConfig {
   near?: number;
   far?: number;
   zoom?: number;
+  // Camera auto-rotation (orbits around lookAt point)
+  autoRotate?: boolean;
+  autoRotateSpeed?: number; // Multiplier for rotation speed (default: 1)
 }
 
 // ============================================================================

@@ -42,15 +42,15 @@ const LIQUID_GRADIENT_SHADER: ShaderConfig = {
   glowColor: "#00aaff",
 };
 
-// Initial liquid gradient plane
+// Initial liquid gradient plane - sized to fill widescreen viewports
 const INITIAL_GRADIENT_PLANE: SceneObject = {
   id: "liquid-gradient",
   name: "Liquid Gradient Background",
   geometry: {
     type: "plane",
     params: {
-      width: 8,
-      height: 8,
+      width: 16,
+      height: 12,
     },
   },
   material: {

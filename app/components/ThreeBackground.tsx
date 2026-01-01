@@ -257,20 +257,34 @@ const liquidGradientShader = {
       rotatedUv.y = centeredUv.x * sin(angle) + centeredUv.y * cos(angle);
       rotatedUv += center;
 
-      // === MOUSE INTERACTION (thick liquid displacement) ===
+      // === MOUSE RIPPLE WAVES ===
       vec2 mouseOffset = vUv - uMouse;
       float mouseDist = length(mouseOffset);
-      float mouseRadius = 0.3;
-      // Sharper falloff for solid liquid feel
-      float mouseInfluence = pow(smoothstep(mouseRadius, 0.0, mouseDist), 2.0);
-
-      // Heavy displacement like pushing through thick liquid
-      vec2 mouseRepel = normalize(mouseOffset + vec2(0.001)) * mouseInfluence * 0.2;
-
-      // Slower, heavier swirl for viscous feel
       float velocityMag = length(uMouseVelocity);
-      float swirlAngle = atan(mouseOffset.y, mouseOffset.x) + time * 0.8;
-      vec2 mouseSwirl = vec2(cos(swirlAngle), sin(swirlAngle)) * mouseInfluence * velocityMag * 0.15;
+
+      // Multiple expanding ripple rings
+      float rippleFreq = 35.0;
+      float rippleSpeed = 4.0;
+      float rippleDecay = 3.5;
+
+      // Primary ripple wave
+      float ripple1 = sin(mouseDist * rippleFreq - time * rippleSpeed) * 0.5 + 0.5;
+      ripple1 *= exp(-mouseDist * rippleDecay); // Exponential falloff
+
+      // Secondary ripple (slightly offset for interference pattern)
+      float ripple2 = sin(mouseDist * rippleFreq * 0.7 - time * rippleSpeed * 1.2 + 1.5) * 0.5 + 0.5;
+      ripple2 *= exp(-mouseDist * rippleDecay * 0.8);
+
+      // Combine ripples
+      float rippleWave = (ripple1 * 0.6 + ripple2 * 0.4);
+
+      // Boost ripples when mouse is moving (drops create bigger waves)
+      float velocityBoost = 1.0 + velocityMag * 2.0;
+      rippleWave *= velocityBoost;
+
+      // Convert ripple to displacement vector (radial outward)
+      vec2 rippleDir = normalize(mouseOffset + vec2(0.001));
+      vec2 rippleDisplace = rippleDir * rippleWave * 0.04;
 
       // === SOLID LIQUID BLOBS ===
       // Low frequency noise for large, smooth blobs
@@ -284,8 +298,8 @@ const liquidGradientShader = {
         cos(blobNoise2 * 2.0 + time * 0.25) * 0.08
       );
 
-      // Apply displacement
-      vec2 liquidUv = rotatedUv + blobDisplace + mouseRepel + mouseSwirl;
+      // Apply displacement (blob movement + ripple waves)
+      vec2 liquidUv = rotatedUv + blobDisplace + rippleDisplace;
 
       // === SOLID COLOR REGIONS WITH SHARP BOUNDARIES ===
       // Base diagonal gradient
@@ -326,18 +340,7 @@ const liquidGradientShader = {
       float highlight = smoothstep(0.3, 0.5, surfaceTension) * 0.12;
       color += uColor4 * highlight;
 
-      // === MOUSE CREATES DEPRESSION/BULGE IN LIQUID ===
-      // Solid glow like light reflecting off liquid surface
-      float surfaceGlow = pow(mouseInfluence, 3.0) * 0.5;
-      color += uColor4 * surfaceGlow;
-
-      // Subtle ring where liquid is displaced (surface tension)
-      float ring = smoothstep(0.15, 0.18, mouseDist) * smoothstep(0.25, 0.18, mouseDist);
-      ring *= mouseInfluence * 2.0;
-      color += uColor3 * ring * 0.3;
-
-      // Velocity creates stretched highlight
-      color += uColor4 * velocityMag * mouseInfluence * 0.4;
+      // Mouse ripples only affect displacement, no color changes
 
       // === EDGE GLOW (refined) ===
       float edgeX = min(vUv.x, 1.0 - vUv.x);
@@ -658,6 +661,12 @@ export default function ThreeBackground() {
   const mouseVelocityRef = useRef({ x: 0, y: 0 });
   const lastMouseRef = useRef({ x: 0.5, y: 0.5 });
 
+  // Camera orbit refs
+  const cameraConfigRef = useRef(camera);
+  const cameraOrbitAngleRef = useRef(0);
+  const cameraOrbitRadiusRef = useRef(0);
+  const cameraOrbitHeightRef = useRef(0);
+
   // Initialize Three.js scene (runs once)
   useEffect(() => {
     if (!containerRef.current) return;
@@ -787,6 +796,23 @@ export default function ThreeBackground() {
         }
       });
 
+      // Camera auto-rotation (orbit around lookAt point)
+      const camConfig = cameraConfigRef.current;
+      if (camConfig.autoRotate) {
+        const speed = (camConfig.autoRotateSpeed ?? 1) * 0.3;
+        cameraOrbitAngleRef.current += deltaTime * speed;
+
+        const lookAt = camConfig.lookAt ?? { x: 0, y: 0, z: 0 };
+        const radius = cameraOrbitRadiusRef.current;
+        const height = cameraOrbitHeightRef.current;
+
+        // Orbit camera around the lookAt point
+        threeCamera.position.x = lookAt.x + Math.cos(cameraOrbitAngleRef.current) * radius;
+        threeCamera.position.z = lookAt.z + Math.sin(cameraOrbitAngleRef.current) * radius;
+        threeCamera.position.y = height;
+        threeCamera.lookAt(lookAt.x, lookAt.y, lookAt.z);
+      }
+
       renderer.render(scene, threeCamera);
     };
     animate();
@@ -807,6 +833,18 @@ export default function ThreeBackground() {
   useEffect(() => {
     if (!cameraRef.current) return;
     const cam = cameraRef.current;
+
+    // Update camera config ref for animation loop
+    cameraConfigRef.current = camera;
+
+    // Calculate orbit radius and height from initial camera position
+    const lookAt = camera.lookAt ?? { x: 0, y: 0, z: 0 };
+    const dx = camera.position.x - lookAt.x;
+    const dz = camera.position.z - lookAt.z;
+    cameraOrbitRadiusRef.current = Math.sqrt(dx * dx + dz * dz);
+    cameraOrbitHeightRef.current = camera.position.y;
+    // Initialize angle from current position
+    cameraOrbitAngleRef.current = Math.atan2(dz, dx);
 
     cam.position.set(camera.position.x, camera.position.y, camera.position.z);
     if (camera.lookAt) {
