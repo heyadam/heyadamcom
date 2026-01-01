@@ -304,10 +304,10 @@ export default function Home() {
                 hasCommands || (streaming && streamingInfo?.isGenerating);
 
               if (isUser) {
-                // User messages - simple bubble
+                // User messages - Cursor-style (no bubble)
                 return (
                   <Message
-                    className="max-w-[85%]"
+                    className="w-full px-4 py-3"
                     from="user"
                     key={message.id}
                   >
@@ -315,14 +315,18 @@ export default function Home() {
                       animate={{ opacity: 1, y: 0 }}
                       initial={{ opacity: 0, y: 4 }}
                       transition={{ duration: 0.15 }}
+                      className="w-full"
                     >
+                      {/* Role label */}
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
+                          You
+                        </span>
+                      </div>
                       <MessageContent
                         className={cn(
                           "relative text-[13px] leading-relaxed",
-                          "bg-neutral-900 dark:bg-neutral-100",
-                          "text-white dark:text-neutral-900",
-                          "rounded-2xl rounded-br-sm",
-                          "px-3.5 py-2.5"
+                          "text-neutral-900 dark:text-neutral-100"
                         )}
                       >
                         <MessageResponse>{content}</MessageResponse>
@@ -332,10 +336,10 @@ export default function Home() {
                 );
               }
 
-              // Assistant messages - with chain of thought for scene commands
+              // Assistant messages - Cursor-style with chain of thought (full width)
               return (
                 <Message
-                  className="max-w-[85%]"
+                  className="w-full max-w-none px-4 py-3"
                   from="assistant"
                   key={message.id}
                 >
@@ -343,20 +347,32 @@ export default function Home() {
                     animate={{ opacity: 1, y: 0 }}
                     initial={{ opacity: 0, y: 4 }}
                     transition={{ duration: 0.15 }}
+                    className="w-full"
                   >
+                    {/* Role label with streaming indicator */}
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-medium text-violet-600 dark:text-violet-400">
+                        Assistant
+                      </span>
+                      {streaming && (
+                        <span className="inline-flex items-center gap-0.5">
+                          <span className="size-1 rounded-full bg-violet-400 animate-pulse" />
+                          <span className="size-1 rounded-full bg-violet-400 animate-pulse [animation-delay:75ms]" />
+                          <span className="size-1 rounded-full bg-violet-400 animate-pulse [animation-delay:150ms]" />
+                        </span>
+                      )}
+                    </div>
+
                     <MessageContent
                       className={cn(
-                        "relative text-[13px] leading-relaxed",
-                        "bg-neutral-100 dark:bg-neutral-800",
-                        "text-neutral-900 dark:text-neutral-100",
-                        "rounded-2xl rounded-bl-sm",
-                        "px-3.5 py-2.5"
+                        "relative w-full text-[13px] leading-relaxed",
+                        "text-neutral-900 dark:text-neutral-100"
                       )}
                     >
                       {/* Chain of Thought for scene commands */}
                       {showChainOfThought && (
                         <ChainOfThought
-                          className="mb-2.5 pb-2.5 border-b border-neutral-200 dark:border-neutral-700"
+                          className="mb-3 p-2.5 rounded-lg bg-neutral-50 dark:bg-neutral-900/50 border border-neutral-200 dark:border-neutral-800"
                           defaultOpen={streaming}
                           open={streaming ? true : undefined}
                         >
@@ -427,15 +443,6 @@ export default function Home() {
 
                       {/* Main message content */}
                       {content && <MessageResponse>{content}</MessageResponse>}
-
-                      {/* Show streaming indicator if no content yet */}
-                      {streaming && !content && !showChainOfThought && (
-                        <span className="inline-flex items-center gap-0.5">
-                          <span className="size-1 rounded-full bg-neutral-400 animate-pulse" />
-                          <span className="size-1 rounded-full bg-neutral-400 animate-pulse [animation-delay:75ms]" />
-                          <span className="size-1 rounded-full bg-neutral-400 animate-pulse [animation-delay:150ms]" />
-                        </span>
-                      )}
                     </MessageContent>
                   </motion.div>
                 </Message>

@@ -5,7 +5,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { motion } from "motion/react";
 import {
-  BotIcon,
   ChevronRightIcon,
   MaximizeIcon,
   MinimizeIcon,
@@ -141,7 +140,7 @@ export type ChatSidebarHeaderProps = HTMLAttributes<HTMLDivElement> & {
 
 export function ChatSidebarHeader({
   className,
-  title = "Assistant",
+  title = "Chat",
   showStatus = true,
   isStreaming = false,
   children,
@@ -152,48 +151,22 @@ export function ChatSidebarHeader({
   return (
     <header
       className={cn(
-        "flex items-center justify-between gap-4 px-4 py-3",
+        "flex items-center justify-between gap-4 px-4 py-2.5",
         "border-b border-neutral-200 dark:border-neutral-800",
         className
       )}
       {...props}
     >
-      <div className="flex items-center gap-3">
-        {/* AI Avatar */}
-        <div className="relative">
-          <div
-            className={cn(
-              "flex size-8 items-center justify-center rounded-full",
-              "bg-neutral-100 dark:bg-neutral-800",
-              "text-neutral-600 dark:text-neutral-400"
-            )}
-          >
-            <BotIcon className="size-4" />
-          </div>
-          {/* Status indicator */}
-          {showStatus && (
-            <span
-              className={cn(
-                "absolute -bottom-0.5 -right-0.5 size-2 rounded-full",
-                "border-2 border-white dark:border-neutral-950",
-                isStreaming
-                  ? "bg-neutral-400 animate-pulse"
-                  : "bg-neutral-900 dark:bg-neutral-100"
-              )}
-            />
-          )}
-        </div>
-
-        <div className="flex flex-col">
-          <h2 className="font-medium text-sm text-neutral-900 dark:text-neutral-100 tracking-tight">
-            {title}
-          </h2>
-          {showStatus && (
-            <span className="text-[10px] text-neutral-500 dark:text-neutral-500 uppercase tracking-widest">
-              {isStreaming ? "Typing..." : "Online"}
-            </span>
-          )}
-        </div>
+      <div className="flex items-center gap-2">
+        <h2 className="font-medium text-sm text-neutral-900 dark:text-neutral-100">
+          {title}
+        </h2>
+        {showStatus && isStreaming && (
+          <span className="inline-flex items-center gap-1 text-xs text-neutral-500">
+            <span className="size-1.5 rounded-full bg-violet-400 animate-pulse" />
+            thinking
+          </span>
+        )}
       </div>
 
       <div className="flex items-center gap-0.5">
@@ -234,10 +207,10 @@ export function ChatSidebarMessages({
 }: ChatSidebarMessagesProps) {
   return (
     <ScrollArea
-      className={cn("flex-1 min-h-0 px-4", className)}
+      className={cn("flex-1 min-h-0", className)}
       {...props}
     >
-      <div className="flex flex-col gap-4 py-4">
+      <div className="flex flex-col divide-y divide-neutral-100 dark:divide-neutral-800/50">
         {children}
       </div>
     </ScrollArea>
@@ -245,7 +218,7 @@ export function ChatSidebarMessages({
 }
 
 // ============================================================================
-// Message Bubble
+// Message (Cursor-style - no bubbles)
 // ============================================================================
 
 export type ChatSidebarMessageProps = MessageProps & {
@@ -265,7 +238,7 @@ export function ChatSidebarMessage({
 
   return (
     <Message
-      className={cn("max-w-[85%]", className)}
+      className={cn("w-full max-w-none px-4 py-3", className)}
       from={from}
       {...props}
     >
@@ -273,38 +246,38 @@ export function ChatSidebarMessage({
         animate={{ opacity: 1, y: 0 }}
         initial={{ opacity: 0, y: 4 }}
         transition={{ duration: 0.15 }}
+        className="w-full"
       >
+        {/* Role label */}
+        <div className="flex items-center gap-2 mb-1">
+          <span className={cn(
+            "text-xs font-medium",
+            isUser
+              ? "text-neutral-500 dark:text-neutral-400"
+              : "text-violet-600 dark:text-violet-400"
+          )}>
+            {isUser ? "You" : "Assistant"}
+          </span>
+          {isStreaming && !isUser && (
+            <span className="inline-flex items-center gap-0.5">
+              <span className="size-1 rounded-full bg-violet-400 animate-pulse" />
+              <span className="size-1 rounded-full bg-violet-400 animate-pulse [animation-delay:75ms]" />
+              <span className="size-1 rounded-full bg-violet-400 animate-pulse [animation-delay:150ms]" />
+            </span>
+          )}
+        </div>
+
+        {/* Message content - full width, no bubble */}
         <MessageContent
           className={cn(
-            "relative text-[13px] leading-relaxed",
-            isUser
-              ? [
-                  "bg-neutral-900 dark:bg-neutral-100",
-                  "text-white dark:text-neutral-900",
-                  "rounded-2xl rounded-br-sm",
-                  "px-3.5 py-2.5",
-                ]
-              : [
-                  "bg-neutral-100 dark:bg-neutral-800",
-                  "text-neutral-900 dark:text-neutral-100",
-                  "rounded-2xl rounded-bl-sm",
-                  "px-3.5 py-2.5",
-                ]
+            "relative w-full text-[13px] leading-relaxed",
+            "text-neutral-900 dark:text-neutral-100"
           )}
         >
           {content ? (
             <MessageResponse>{content}</MessageResponse>
           ) : (
             children
-          )}
-
-          {/* Streaming indicator */}
-          {isStreaming && !isUser && (
-            <span className="inline-flex items-center gap-0.5 ml-1">
-              <span className="size-1 rounded-full bg-neutral-400 animate-pulse" />
-              <span className="size-1 rounded-full bg-neutral-400 animate-pulse [animation-delay:75ms]" />
-              <span className="size-1 rounded-full bg-neutral-400 animate-pulse [animation-delay:150ms]" />
-            </span>
           )}
         </MessageContent>
       </motion.div>
@@ -494,7 +467,7 @@ export function ChatSidebarInput({
 }
 
 // ============================================================================
-// Typing Indicator
+// Typing Indicator (Cursor-style)
 // ============================================================================
 
 export type ChatSidebarTypingProps = HTMLAttributes<HTMLDivElement>;
@@ -505,21 +478,19 @@ export function ChatSidebarTyping({
   return (
     <motion.div
       animate={{ opacity: 1, y: 0 }}
-      className={cn("flex items-center gap-2 px-4", className)}
+      className={cn("px-4 py-3", className)}
       exit={{ opacity: 0, y: -6 }}
       initial={{ opacity: 0, y: 6 }}
     >
-      <div
-        className={cn(
-          "flex items-center gap-1.5 rounded-2xl rounded-bl-sm px-3.5 py-2.5",
-          "bg-neutral-100 dark:bg-neutral-800"
-        )}
-      >
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium text-violet-600 dark:text-violet-400">
+          Assistant
+        </span>
         <div className="flex gap-1">
           {[0, 1, 2].map((i) => (
             <motion.span
               animate={{ opacity: [0.4, 1, 0.4] }}
-              className="size-1.5 rounded-full bg-neutral-400 dark:bg-neutral-500"
+              className="size-1 rounded-full bg-violet-400"
               key={i}
               transition={{
                 duration: 1,
