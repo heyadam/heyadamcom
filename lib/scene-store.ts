@@ -6,6 +6,7 @@ import type {
   SceneLight,
   CameraConfig,
   SceneConfig,
+  ShaderConfig,
 } from "./scene-types";
 
 // Default camera positioned at z=5, looking at origin
@@ -30,9 +31,42 @@ const DEFAULT_AMBIENT_LIGHT: SceneLight = {
   intensity: 0.5,
 };
 
+// Apple M4-inspired liquid gradient shader config
+const LIQUID_GRADIENT_SHADER: ShaderConfig = {
+  shaderType: "liquidGradient",
+  // Deep navy/black to bright cyan gradient inspired by M4 Pro chip
+  colors: ["#000005", "#001028", "#0055aa", "#00bbff"],
+  speed: 0.4, // Slightly faster for more visible liquid motion
+  noiseScale: 2.2, // More distortion for liquid feel
+  glowIntensity: 0.7,
+  glowColor: "#00aaff",
+};
+
+// Initial liquid gradient plane
+const INITIAL_GRADIENT_PLANE: SceneObject = {
+  id: "liquid-gradient",
+  name: "Liquid Gradient Background",
+  geometry: {
+    type: "plane",
+    params: {
+      width: 8,
+      height: 8,
+    },
+  },
+  material: {
+    type: "shader",
+    shader: LIQUID_GRADIENT_SHADER,
+  },
+  position: { x: 0, y: 0, z: 0 },
+  rotation: { x: 0, y: 0, z: 0 },
+  scale: { x: 1, y: 1, z: 1 },
+};
+
 // Initial state for a fresh scene
 const INITIAL_STATE: SceneState = {
-  objects: {},
+  objects: {
+    "liquid-gradient": INITIAL_GRADIENT_PLANE,
+  },
   lights: {
     "default-ambient": DEFAULT_AMBIENT_LIGHT,
   },

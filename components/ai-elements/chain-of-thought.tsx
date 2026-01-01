@@ -222,6 +222,44 @@ export const ChainOfThoughtImage = memo(
   )
 );
 
+export type ChainOfThoughtCodeProps = ComponentProps<"div"> & {
+  language?: string;
+  code?: string;
+};
+
+export const ChainOfThoughtCode = memo(
+  ({
+    className,
+    language = "json",
+    code,
+    children,
+    ...props
+  }: ChainOfThoughtCodeProps) => (
+    <div
+      className={cn(
+        "overflow-hidden rounded-md",
+        "bg-neutral-900 dark:bg-neutral-950",
+        "border border-neutral-800",
+        className
+      )}
+      {...props}
+    >
+      {language && (
+        <div className="flex items-center justify-between px-2.5 py-1 border-b border-neutral-800">
+          <span className="text-[10px] font-mono text-neutral-500 uppercase tracking-wider">
+            {language}
+          </span>
+        </div>
+      )}
+      <pre className="p-2.5 overflow-x-auto max-h-48">
+        <code className="text-[11px] font-mono text-neutral-300 leading-relaxed whitespace-pre-wrap break-all">
+          {code ?? children}
+        </code>
+      </pre>
+    </div>
+  )
+);
+
 ChainOfThought.displayName = "ChainOfThought";
 ChainOfThoughtHeader.displayName = "ChainOfThoughtHeader";
 ChainOfThoughtStep.displayName = "ChainOfThoughtStep";
@@ -229,3 +267,4 @@ ChainOfThoughtSearchResults.displayName = "ChainOfThoughtSearchResults";
 ChainOfThoughtSearchResult.displayName = "ChainOfThoughtSearchResult";
 ChainOfThoughtContent.displayName = "ChainOfThoughtContent";
 ChainOfThoughtImage.displayName = "ChainOfThoughtImage";
+ChainOfThoughtCode.displayName = "ChainOfThoughtCode";

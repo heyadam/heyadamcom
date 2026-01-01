@@ -122,7 +122,7 @@ export function ChatSidebar({ className, children }: ChatSidebarProps) {
       )}
       style={{ width: isExpanded ? "50%" : 400 }}
     >
-      <div className="relative z-10 flex h-full flex-col">
+      <div className="relative z-10 flex h-full flex-col overflow-hidden">
         {children}
       </div>
     </aside>
@@ -234,7 +234,7 @@ export function ChatSidebarMessages({
 }: ChatSidebarMessagesProps) {
   return (
     <ScrollArea
-      className={cn("flex-1 px-4", className)}
+      className={cn("flex-1 min-h-0 px-4", className)}
       {...props}
     >
       <div className="flex flex-col gap-4 py-4">
@@ -326,7 +326,7 @@ export function ChatSidebarEmpty({
   return (
     <div
       className={cn(
-        "flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center",
+        "flex flex-1 min-h-0 flex-col items-center justify-center gap-4 px-8 text-center",
         className
       )}
       {...props}

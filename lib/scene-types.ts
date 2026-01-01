@@ -99,7 +99,19 @@ export type MaterialType =
   | "phong"
   | "lambert"
   | "toon"
-  | "normal";
+  | "normal"
+  | "shader";
+
+export type ShaderType = "liquidGradient" | "custom";
+
+export interface ShaderConfig {
+  shaderType: ShaderType;
+  colors?: string[]; // Array of hex colors for gradient
+  speed?: number; // Animation speed multiplier
+  noiseScale?: number; // Scale of noise/distortion
+  glowIntensity?: number; // Edge glow intensity
+  glowColor?: string; // Edge glow color
+}
 
 export interface MaterialConfig {
   type: MaterialType;
@@ -112,6 +124,8 @@ export interface MaterialConfig {
   emissive?: string; // hex color
   emissiveIntensity?: number;
   side?: "front" | "back" | "double";
+  // Shader-specific options (when type === "shader")
+  shader?: ShaderConfig;
 }
 
 // ============================================================================
