@@ -10,7 +10,6 @@ import {
   ChatSidebarMessages,
   ChatSidebarProvider,
   ChatSidebarSuggestions,
-  ChatSidebarTyping,
 } from "@/components/ai-elements/chat-sidebar";
 import {
   ChainOfThought,
@@ -24,7 +23,7 @@ import {
   MessageContent,
   MessageResponse,
 } from "@/components/ai-elements/message";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { AnimatePresence, motion } from "motion/react";
 import ThreeBackground from "./components/ThreeBackground";
@@ -45,9 +44,20 @@ const INITIAL_SUGGESTIONS = [
 
 /**
  * Strip <scene-commands> tags from text so they don't show in the chat.
+ * Handles both complete blocks and partial/streaming blocks.
  */
 function cleanMessageContent(text: string): string {
-  return text.replace(/<scene-commands>[\s\S]*?<\/scene-commands>/g, "").trim();
+  // First, remove any complete <scene-commands>...</scene-commands> blocks
+  let cleaned = text.replace(/<scene-commands>[\s\S]*?<\/scene-commands>/g, "");
+
+  // Then, remove any partial/unclosed <scene-commands> block
+  // This handles streaming where we have the opening tag but not the closing tag yet
+  const partialIndex = cleaned.indexOf("<scene-commands>");
+  if (partialIndex !== -1) {
+    cleaned = cleaned.slice(0, partialIndex);
+  }
+
+  return cleaned.trim();
 }
 
 /**
@@ -136,6 +146,11 @@ export default function Home() {
   // Ref for auto-scrolling to bottom of messages
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Track streaming commands as they arrive for Chain of Thought display
+  const [streamingCommands, setStreamingCommands] = useState<SceneCommand[]>(
+    []
+  );
+
   const { messages, sendMessage, status } = useChat({
     transport: new DefaultChatTransport({ api: "/api/chat" }),
     // Handle data parts from the stream - this is where scene commands arrive
@@ -143,12 +158,25 @@ export default function Home() {
       // Check if this is a scene command data part
       if (dataPart.type === "data-scene-command") {
         const command = dataPart.data as SceneCommand;
+        // Apply to Three.js scene
         applyCommand(command);
+        // Track for Chain of Thought display
+        setStreamingCommands((prev) => [...prev, command]);
       }
     },
   });
 
   const isLoading = status === "streaming" || status === "submitted";
+
+  // Reset streaming commands when a new response starts
+  const prevStatusRef = useRef(status);
+  useEffect(() => {
+    // When transitioning to submitted (new request), clear the commands
+    if (prevStatusRef.current !== "submitted" && status === "submitted") {
+      setStreamingCommands([]);
+    }
+    prevStatusRef.current = status;
+  }, [status]);
 
   const handleSubmit = useCallback(
     async (message: PromptInputMessage) => {
@@ -262,10 +290,16 @@ export default function Home() {
             {messages.map((message, index) => {
               const isUser = message.role === "user";
               const content = getCleanMessageContent(message);
-              const commands = isUser ? [] : getMessageCommands(message);
               const streaming = isMessageStreaming(message, index);
+              // Use streaming commands for the current message, otherwise extract from text
+              const commands = isUser
+                ? []
+                : streaming
+                  ? streamingCommands
+                  : getMessageCommands(message);
               const streamingInfo = streaming ? getStreamingInfo(message) : null;
               const hasCommands = commands.length > 0;
+              // Show Chain of Thought if we have commands OR if we're streaming and generating commands
               const showChainOfThought =
                 hasCommands || (streaming && streamingInfo?.isGenerating);
 
