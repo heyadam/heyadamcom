@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
+import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { useSceneStore } from "@/lib/scene-store";
 import type {
   SceneObject,
@@ -11,6 +12,7 @@ import type {
   GeometryType,
   GeometryParams,
   BoxParams,
+  RoundedBoxParams,
   SphereParams,
   CylinderParams,
   ConeParams,
@@ -35,6 +37,16 @@ function createGeometry(
     case "box": {
       const p = params as BoxParams | undefined;
       return new THREE.BoxGeometry(p?.width ?? 1, p?.height ?? 1, p?.depth ?? 1);
+    }
+    case "roundedBox": {
+      const p = params as RoundedBoxParams | undefined;
+      return new RoundedBoxGeometry(
+        p?.width ?? 1,
+        p?.height ?? 1,
+        p?.depth ?? 1,
+        p?.segments ?? 4,
+        p?.radius ?? 0.1
+      );
     }
     case "sphere": {
       const p = params as SphereParams | undefined;
@@ -118,20 +130,32 @@ function createGeometry(
 // Shader Factory
 // ============================================================================
 
-// Liquid gradient shader - creates flowing gradient effect like Apple M4 Pro chip
+// Liquid gradient shader - sinusoidal warp with bump mapping (inspired by Shadertoy)
 const liquidGradientShader = {
   uniforms: {
     uTime: { value: 0 },
-    uMouse: { value: new THREE.Vector2(0.5, 0.5) }, // Normalized mouse position
-    uMouseVelocity: { value: new THREE.Vector2(0, 0) }, // Mouse movement speed
+    uMouse: { value: new THREE.Vector2(0.5, 0.5) },
+    uMouseVelocity: { value: new THREE.Vector2(0, 0) },
+    // Colors
     uColor1: { value: new THREE.Color("#000000") },
     uColor2: { value: new THREE.Color("#001133") },
     uColor3: { value: new THREE.Color("#0066ff") },
     uColor4: { value: new THREE.Color("#00ccff") },
-    uNoiseScale: { value: 2.0 },
-    uSpeed: { value: 0.3 },
-    uGlowIntensity: { value: 0.5 },
     uGlowColor: { value: new THREE.Color("#00aaff") },
+    // Animation
+    uSpeed: { value: 0.3 },
+    uNoiseScale: { value: 2.0 },
+    uGlowIntensity: { value: 0.5 },
+    // Warp controls
+    uWarpScale: { value: 4.0 },
+    uWarpFrequency: { value: 3.0 },
+    uWarpAmplitude: { value: 1.0 },
+    // Lighting controls
+    uBumpStrength: { value: 0.15 },
+    uLightOrbitSpeed: { value: 1.5 },
+    uLightOrbitRadius: { value: 0.4 },
+    uSpecularPower: { value: 16.0 },
+    uSpecularIntensity: { value: 1.5 },
   },
   vertexShader: `
     varying vec2 vUv;
@@ -147,219 +171,167 @@ const liquidGradientShader = {
     uniform float uTime;
     uniform vec2 uMouse;
     uniform vec2 uMouseVelocity;
+    // Colors
     uniform vec3 uColor1;
     uniform vec3 uColor2;
     uniform vec3 uColor3;
     uniform vec3 uColor4;
-    uniform float uNoiseScale;
-    uniform float uSpeed;
-    uniform float uGlowIntensity;
     uniform vec3 uGlowColor;
+    // Animation
+    uniform float uSpeed;
+    uniform float uNoiseScale;
+    uniform float uGlowIntensity;
+    // Warp controls
+    uniform float uWarpScale;
+    uniform float uWarpFrequency;
+    uniform float uWarpAmplitude;
+    // Lighting controls
+    uniform float uBumpStrength;
+    uniform float uLightOrbitSpeed;
+    uniform float uLightOrbitRadius;
+    uniform float uSpecularPower;
+    uniform float uSpecularIntensity;
 
     varying vec2 vUv;
     varying vec3 vPosition;
 
-    // Simplex noise functions
-    vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
-    vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
-    vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
-    vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+    // ============================================================================
+    // Sinusoidal Warp Function (from Shadertoy - Fabrice's Plop 2)
+    // Creates organic, liquid-metal-like deformations through layered sin/cos feedback
+    // ============================================================================
+    vec2 warp(vec2 p, float t) {
+      // Scale and offset for interesting starting point
+      p = (p + 3.0) * uWarpScale;
 
-    float snoise(vec3 v) {
-      const vec2 C = vec2(1.0/6.0, 1.0/3.0);
-      const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
-
-      vec3 i  = floor(v + dot(v, C.yyy));
-      vec3 x0 = v - i + dot(i, C.xxx);
-
-      vec3 g = step(x0.yzx, x0.xyz);
-      vec3 l = 1.0 - g;
-      vec3 i1 = min(g.xyz, l.zxy);
-      vec3 i2 = max(g.xyz, l.zxy);
-
-      vec3 x1 = x0 - i1 + C.xxx;
-      vec3 x2 = x0 - i2 + C.yyy;
-      vec3 x3 = x0 - D.yyy;
-
-      i = mod289(i);
-      vec4 p = permute(permute(permute(
-        i.z + vec4(0.0, i1.z, i2.z, 1.0))
-        + i.y + vec4(0.0, i1.y, i2.y, 1.0))
-        + i.x + vec4(0.0, i1.x, i2.x, 1.0));
-
-      float n_ = 0.142857142857;
-      vec3 ns = n_ * D.wyz - D.xzx;
-
-      vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
-
-      vec4 x_ = floor(j * ns.z);
-      vec4 y_ = floor(j - 7.0 * x_);
-
-      vec4 x = x_ *ns.x + ns.yyyy;
-      vec4 y = y_ *ns.x + ns.yyyy;
-      vec4 h = 1.0 - abs(x) - abs(y);
-
-      vec4 b0 = vec4(x.xy, y.xy);
-      vec4 b1 = vec4(x.zw, y.zw);
-
-      vec4 s0 = floor(b0)*2.0 + 1.0;
-      vec4 s1 = floor(b1)*2.0 + 1.0;
-      vec4 sh = -step(h, vec4(0.0));
-
-      vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy;
-      vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;
-
-      vec3 p0 = vec3(a0.xy, h.x);
-      vec3 p1 = vec3(a0.zw, h.y);
-      vec3 p2 = vec3(a1.xy, h.z);
-      vec3 p3 = vec3(a1.zw, h.w);
-
-      vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
-      p0 *= norm.x;
-      p1 *= norm.y;
-      p2 *= norm.z;
-      p3 *= norm.w;
-
-      vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
-      m = m * m;
-      return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
-    }
-
-    // Smooth noise for solid liquid blobs (fewer octaves, lower frequency)
-    float liquidFbm(vec3 p) {
-      float value = 0.0;
-      float amplitude = 0.6;
-      float frequency = 0.8;
-      // Only 2 octaves for smoother, more solid appearance
-      for (int i = 0; i < 2; i++) {
-        value += amplitude * snoise(p * frequency);
-        amplitude *= 0.4;
-        frequency *= 1.8;
+      // Layered sinusoidal feedback - the magic sauce
+      // Each iteration adds more organic complexity
+      for (int i = 0; i < 3; i++) {
+        p += cos(p.yx * uWarpFrequency + vec2(t, 1.57)) / 3.0 * uWarpAmplitude;
+        p += sin(p.yx + t + vec2(1.57, 0.0)) / 2.0 * uWarpAmplitude;
+        p *= 1.3;
       }
-      return value;
+
+      // Add subtle jitter to smooth high-frequency areas
+      p += fract(sin(p + vec2(13.0, 7.0)) * 5e5) * 0.03 - 0.015;
+
+      return mod(p, 2.0) - 1.0; // Normalize to [-1, 1]
     }
 
-    // Metaball-like function for solid blob boundaries
-    float metaball(vec2 uv, vec2 center, float radius) {
-      float d = length(uv - center);
-      return radius / (d * d + 0.01);
+    // Bump function - returns the "height" at a point for bump mapping
+    float bumpFunc(vec2 p, float t) {
+      return length(warp(p, t)) * 0.7071;
+    }
+
+    // Smooth color palette blending
+    vec3 smoothFract(vec3 x) {
+      x = fract(x);
+      return min(x, x * (1.0 - x) * 12.0);
     }
 
     void main() {
       float time = uTime * uSpeed;
 
-      // Rotate UV coordinates 45 degrees for diagonal gradient
-      vec2 center = vec2(0.5, 0.5);
-      vec2 centeredUv = vUv - center;
-      float angle = 0.785398;
-      vec2 rotatedUv;
-      rotatedUv.x = centeredUv.x * cos(angle) - centeredUv.y * sin(angle);
-      rotatedUv.y = centeredUv.x * sin(angle) + centeredUv.y * cos(angle);
-      rotatedUv += center;
+      // ============================================================================
+      // BUMP MAPPING - Perturbing the surface normal
+      // ============================================================================
+      vec2 eps = vec2(0.005, 0.0);
 
-      // === MOUSE RIPPLE WAVES ===
-      vec2 mouseOffset = vUv - uMouse;
-      float mouseDist = length(mouseOffset);
-      float velocityMag = length(uMouseVelocity);
+      float f = bumpFunc(vUv, time);
+      float fx = bumpFunc(vUv - eps.xy, time);
+      float fy = bumpFunc(vUv - eps.yx, time);
 
-      // Multiple expanding ripple rings
-      float rippleFreq = 35.0;
-      float rippleSpeed = 4.0;
-      float rippleDecay = 3.5;
+      // Calculate gradient for normal perturbation
+      float gradX = (fx - f) / eps.x;
+      float gradY = (fy - f) / eps.x;
 
-      // Primary ripple wave
-      float ripple1 = sin(mouseDist * rippleFreq - time * rippleSpeed) * 0.5 + 0.5;
-      ripple1 *= exp(-mouseDist * rippleDecay); // Exponential falloff
+      // Perturb the surface normal (plane facing -Z toward viewer)
+      vec3 sn = normalize(vec3(0.0, 0.0, -1.0) + vec3(gradX, gradY, 0.0) * uBumpStrength);
 
-      // Secondary ripple (slightly offset for interference pattern)
-      float ripple2 = sin(mouseDist * rippleFreq * 0.7 - time * rippleSpeed * 1.2 + 1.5) * 0.5 + 0.5;
-      ripple2 *= exp(-mouseDist * rippleDecay * 0.8);
+      // ============================================================================
+      // LIGHTING - Moving point light with attenuation
+      // ============================================================================
+      vec3 sp = vec3(vUv, 0.0); // Surface position
+      vec3 rd = normalize(vec3(vUv - 0.5, 1.0)); // Ray direction
 
-      // Combine ripples
-      float rippleWave = (ripple1 * 0.6 + ripple2 * 0.4);
-
-      // Boost ripples when mouse is moving (drops create bigger waves)
-      float velocityBoost = 1.0 + velocityMag * 2.0;
-      rippleWave *= velocityBoost;
-
-      // Convert ripple to displacement vector (radial outward)
-      vec2 rippleDir = normalize(mouseOffset + vec2(0.001));
-      vec2 rippleDisplace = rippleDir * rippleWave * 0.04;
-
-      // === SOLID LIQUID BLOBS ===
-      // Low frequency noise for large, smooth blobs
-      vec3 noiseCoord = vec3(vUv * uNoiseScale * 0.6, time * 0.15);
-      float blobNoise = liquidFbm(noiseCoord);
-      float blobNoise2 = liquidFbm(noiseCoord + vec3(100.0, 50.0, time * 0.1));
-
-      // Slow, heavy movement
-      vec2 blobDisplace = vec2(
-        sin(blobNoise * 2.0 + time * 0.3) * 0.08,
-        cos(blobNoise2 * 2.0 + time * 0.25) * 0.08
+      // Orbiting light position influenced by mouse
+      vec3 lp = vec3(
+        cos(time * uLightOrbitSpeed) * uLightOrbitRadius + (uMouse.x - 0.5) * 0.3,
+        sin(time * uLightOrbitSpeed * 0.8) * uLightOrbitRadius * 0.75 + (uMouse.y - 0.5) * 0.3,
+        -0.8
       );
 
-      // Apply displacement (blob movement + ripple waves)
-      vec2 liquidUv = rotatedUv + blobDisplace + rippleDisplace;
+      // Light direction and distance
+      vec3 ld = lp - sp;
+      float lDist = max(length(ld), 0.0001);
+      ld /= lDist;
 
-      // === SOLID COLOR REGIONS WITH SHARP BOUNDARIES ===
-      // Base diagonal gradient
-      float baseGradient = (liquidUv.x + liquidUv.y) * 0.5;
+      // Light attenuation with distance
+      float atten = 1.0 / (1.0 + lDist * lDist * 0.5);
 
-      // Create distinct blob regions using stepped noise
-      float blobField = liquidFbm(vec3(vUv * 1.5, time * 0.12));
+      // Darken crevices using bump height
+      atten *= f * 0.85 + 0.15;
 
-      // Threshold the noise to create solid regions
-      float region1 = smoothstep(-0.1, 0.05, blobField);
-      float region2 = smoothstep(0.1, 0.25, blobField);
-      float region3 = smoothstep(0.3, 0.45, blobField);
+      // Diffuse lighting - enhanced for liquid look
+      float diff = max(dot(sn, ld), 0.0);
+      diff = pow(diff, 4.0) * 0.6 + pow(diff, 8.0) * 0.4;
 
-      // Combine gradient with blob regions for solid color bands
-      float colorIndex = baseGradient + blobField * 0.3;
+      // Specular highlighting - creates that wet/metallic sheen
+      float spec = pow(max(dot(reflect(-ld, sn), -rd), 0.0), uSpecularPower);
+
+      // ============================================================================
+      // COLOR - Warped gradient with 4-color palette
+      // ============================================================================
+      vec2 warpedUv = warp(vUv, time);
+
+      // Create color index from warped coordinates
+      float colorIndex = (warpedUv.x + warpedUv.y) * 0.25 + 0.5;
+      colorIndex += f * 0.3; // Add bump variation
       colorIndex = clamp(colorIndex, 0.0, 1.0);
 
-      // Sharp color transitions (solid liquid, not smoky)
-      vec3 color;
-      if (colorIndex < 0.25) {
-        float t = smoothstep(0.0, 0.25, colorIndex);
-        t = t * t * (3.0 - 2.0 * t); // Smootherstep for solid feel
-        color = mix(uColor1, uColor2, t);
-      } else if (colorIndex < 0.5) {
-        float t = smoothstep(0.25, 0.5, colorIndex);
-        t = t * t * (3.0 - 2.0 * t);
-        color = mix(uColor2, uColor3, t);
-      } else if (colorIndex < 0.75) {
-        float t = smoothstep(0.5, 0.75, colorIndex);
-        t = t * t * (3.0 - 2.0 * t);
-        color = mix(uColor3, uColor4, t);
+      // Smooth 4-color gradient
+      vec3 texCol;
+      if (colorIndex < 0.33) {
+        float t = smoothstep(0.0, 0.33, colorIndex);
+        texCol = mix(uColor1, uColor2, t);
+      } else if (colorIndex < 0.66) {
+        float t = smoothstep(0.33, 0.66, colorIndex);
+        texCol = mix(uColor2, uColor3, t);
       } else {
-        color = uColor4;
+        float t = smoothstep(0.66, 1.0, colorIndex);
+        texCol = mix(uColor3, uColor4, t);
       }
 
-      // Add subtle surface tension highlights (not shimmer)
-      float surfaceTension = liquidFbm(vec3(liquidUv * 3.0, time * 0.2));
-      float highlight = smoothstep(0.3, 0.5, surfaceTension) * 0.12;
-      color += uColor4 * highlight;
+      // Boost saturation slightly
+      texCol = pow(texCol, vec3(0.9));
 
-      // Mouse ripples only affect displacement, no color changes
+      // ============================================================================
+      // FINAL COMPOSITING
+      // ============================================================================
+      // Combine diffuse lighting with colors
+      vec3 col = texCol * (diff * vec3(1.0, 0.97, 0.92) * 2.5 + 0.3);
 
-      // === EDGE GLOW (refined) ===
+      // Add specular highlights with glow color influence
+      col += mix(vec3(1.0, 0.7, 0.3), uGlowColor, 0.5) * spec * uSpecularIntensity;
+
+      // Apply light attenuation
+      col *= atten;
+
+      // Faux environment mapping - adds that extra shine
+      float envRef = max(dot(reflect(rd, sn), vec3(1.0, 0.5, 0.0)), 0.0);
+      col += col * pow(envRef, 4.0) * uGlowColor * uGlowIntensity * 2.0;
+
+      // Edge glow
       float edgeX = min(vUv.x, 1.0 - vUv.x);
       float edgeY = min(vUv.y, 1.0 - vUv.y);
       float edge = min(edgeX, edgeY);
-      float glowWidth = 0.06;
-      float edgeMask = smoothstep(0.0, glowWidth, edge);
+      float edgeMask = smoothstep(0.0, 0.08, edge);
 
-      // Subtle animated edge glow
-      float glowPulse = sin(time * 2.0) * 0.1 + 0.9;
-      vec3 edgeGlow = uGlowColor * (1.0 - edgeMask) * uGlowIntensity * glowPulse * 0.7;
+      float glowPulse = sin(time * 2.0) * 0.15 + 0.85;
+      vec3 edgeGlow = uGlowColor * (1.0 - edgeMask) * uGlowIntensity * glowPulse;
+      col = col * edgeMask + edgeGlow + col * (1.0 - edgeMask) * 0.3;
 
-      color = color * edgeMask + edgeGlow + color * (1.0 - edgeMask) * 0.4;
-
-      // Boost saturation for solid liquid look
-      float luminance = dot(color, vec3(0.299, 0.587, 0.114));
-      color = mix(vec3(luminance), color, 1.2);
-
-      gl_FragColor = vec4(color, 1.0);
+      // Gamma correction (sqrt approximation for 2.0 gamma)
+      gl_FragColor = vec4(sqrt(clamp(col, 0.0, 1.0)), 1.0);
     }
   `,
 };
@@ -374,14 +346,26 @@ function createShaderMaterial(config: ShaderConfig): THREE.ShaderMaterial {
         uTime: { value: 0 },
         uMouse: { value: new THREE.Vector2(0.5, 0.5) },
         uMouseVelocity: { value: new THREE.Vector2(0, 0) },
+        // Colors
         uColor1: { value: new THREE.Color(colors[0] || "#000000") },
         uColor2: { value: new THREE.Color(colors[1] || "#001133") },
         uColor3: { value: new THREE.Color(colors[2] || "#0066ff") },
         uColor4: { value: new THREE.Color(colors[3] || "#00ccff") },
-        uNoiseScale: { value: config.noiseScale ?? 2.0 },
-        uSpeed: { value: config.speed ?? 0.3 },
-        uGlowIntensity: { value: config.glowIntensity ?? 0.5 },
         uGlowColor: { value: new THREE.Color(config.glowColor || "#00aaff") },
+        // Animation
+        uSpeed: { value: config.speed ?? 0.3 },
+        uNoiseScale: { value: config.noiseScale ?? 2.0 },
+        uGlowIntensity: { value: config.glowIntensity ?? 0.5 },
+        // Warp controls
+        uWarpScale: { value: config.warpScale ?? 4.0 },
+        uWarpFrequency: { value: config.warpFrequency ?? 3.0 },
+        uWarpAmplitude: { value: config.warpAmplitude ?? 1.0 },
+        // Lighting controls
+        uBumpStrength: { value: config.bumpStrength ?? 0.15 },
+        uLightOrbitSpeed: { value: config.lightOrbitSpeed ?? 1.5 },
+        uLightOrbitRadius: { value: config.lightOrbitRadius ?? 0.4 },
+        uSpecularPower: { value: config.specularPower ?? 16.0 },
+        uSpecularIntensity: { value: config.specularIntensity ?? 1.5 },
       },
       vertexShader: liquidGradientShader.vertexShader,
       fragmentShader: liquidGradientShader.fragmentShader,

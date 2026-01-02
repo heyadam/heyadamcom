@@ -42,15 +42,18 @@ const LIQUID_GRADIENT_SHADER: ShaderConfig = {
   glowColor: "#00aaff",
 };
 
-// Initial liquid gradient plane - sized to fill widescreen viewports
-const INITIAL_GRADIENT_PLANE: SceneObject = {
+// Initial liquid gradient on a rounded box
+const INITIAL_GRADIENT_BOX: SceneObject = {
   id: "liquid-gradient",
-  name: "Liquid Gradient Background",
+  name: "Liquid Gradient Box",
   geometry: {
-    type: "plane",
+    type: "roundedBox",
     params: {
-      width: 16,
-      height: 12,
+      width: 3,
+      height: 3,
+      depth: 3,
+      radius: 0.4,
+      segments: 4,
     },
   },
   material: {
@@ -58,14 +61,19 @@ const INITIAL_GRADIENT_PLANE: SceneObject = {
     shader: LIQUID_GRADIENT_SHADER,
   },
   position: { x: 0, y: 0, z: 0 },
-  rotation: { x: 0, y: 0, z: 0 },
+  rotation: { x: 0.3, y: 0.5, z: 0 },
   scale: { x: 1, y: 1, z: 1 },
+  animation: {
+    type: "rotate",
+    speed: 0.3,
+    axis: "y",
+  },
 };
 
 // Initial state for a fresh scene
 const INITIAL_STATE: SceneState = {
   objects: {
-    "liquid-gradient": INITIAL_GRADIENT_PLANE,
+    "liquid-gradient": INITIAL_GRADIENT_BOX,
   },
   lights: {
     "default-ambient": DEFAULT_AMBIENT_LIGHT,

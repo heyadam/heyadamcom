@@ -168,19 +168,11 @@ export default function Home() {
 
   const isLoading = status === "streaming" || status === "submitted";
 
-  // Reset streaming commands when a new response starts
-  const prevStatusRef = useRef(status);
-  useEffect(() => {
-    // When transitioning to submitted (new request), clear the commands
-    if (prevStatusRef.current !== "submitted" && status === "submitted") {
-      setStreamingCommands([]);
-    }
-    prevStatusRef.current = status;
-  }, [status]);
-
   const handleSubmit = useCallback(
     async (message: PromptInputMessage) => {
       if (!message.text.trim()) return;
+      // Clear previous streaming commands before sending new message
+      setStreamingCommands([]);
       sendMessage({ text: message.text });
     },
     [sendMessage]

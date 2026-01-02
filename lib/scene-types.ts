@@ -4,6 +4,7 @@
 
 export type GeometryType =
   | "box"
+  | "roundedBox"
   | "sphere"
   | "cylinder"
   | "cone"
@@ -21,6 +22,14 @@ export interface BoxParams {
   width?: number;
   height?: number;
   depth?: number;
+}
+
+export interface RoundedBoxParams {
+  width?: number;
+  height?: number;
+  depth?: number;
+  radius?: number; // Corner radius
+  segments?: number; // Smoothness of corners
 }
 
 export interface SphereParams {
@@ -79,6 +88,7 @@ export interface PolyhedronParams {
 
 export type GeometryParams =
   | BoxParams
+  | RoundedBoxParams
   | SphereParams
   | CylinderParams
   | ConeParams
@@ -107,10 +117,22 @@ export type ShaderType = "liquidGradient" | "custom";
 export interface ShaderConfig {
   shaderType: ShaderType;
   colors?: string[]; // Array of hex colors for gradient
-  speed?: number; // Animation speed multiplier
+  speed?: number; // Animation speed multiplier (default: 0.3)
   noiseScale?: number; // Scale of noise/distortion
-  glowIntensity?: number; // Edge glow intensity
+  glowIntensity?: number; // Edge glow intensity (default: 0.5)
   glowColor?: string; // Edge glow color
+
+  // === Warp Animation Controls ===
+  warpScale?: number; // Size of warp patterns, higher = smaller patterns (default: 4.0)
+  warpFrequency?: number; // Tightness of sin/cos oscillations (default: 3.0)
+  warpAmplitude?: number; // Strength of warp displacement (default: 1.0)
+
+  // === Lighting Controls ===
+  bumpStrength?: number; // Surface relief intensity (default: 0.15)
+  lightOrbitSpeed?: number; // Speed of light orbit animation (default: 1.5)
+  lightOrbitRadius?: number; // Radius of light orbit (default: 0.4)
+  specularPower?: number; // Sharpness of specular highlights (default: 16.0)
+  specularIntensity?: number; // Brightness of specular highlights (default: 1.5)
 }
 
 export interface MaterialConfig {
